@@ -88,7 +88,6 @@ def crawler(browser: Browser) -> None: # 爬蟲
 		page.locator('button[name="yes"]').wait_for(timeout=1000) # 等待 "yes" 按鈕出現
 		page.click('button[name="yes"]') # 按下 "yes" 按鈕 (登出其他的 webui)
 	except TimeoutError: # 若不需要重新登入, 則跳過這一步
-		print(" [debug]")
 		pass
 	Timer.end()
 	
@@ -148,14 +147,11 @@ def main() -> None:
 		
 		try:
 			crawler(browser) # 開始爬 webui 的網頁
+		except KeyboardInterrupt:
+			pass
 		except Exception as e: # 如果爬蟲出錯, 印出錯誤訊息
 			print("\nError:")
 			print(e)
-		finally:
-			print(" Closing browser ...", end="", flush=True)
-			browser.close()
-			print(" [ok]")
-			print_divider()
 
 if __name__ == "__main__":
 	main()
