@@ -61,35 +61,48 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 	plt.tight_layout()
 	plt.show()
 
+class Timer: # 自訂計時器
+	_start_time = 0
+	
+	@staticmethod
+	def start(message: str) -> None:
+		print(message, end="", flush=True)
+		Timer._start_time = time.time()
+	
+	@staticmethod
+	def end() -> None:
+		during_time_ms = (time.time() - Timer._start_time) * 1000
+		print(f" [ok, {during_time_ms:.0f}ms]")
+
 def crawler(browser: Browser) -> None: # 爬蟲
-	print(" Open the webui ...", end="", flush=True)
+	Timer.start(" Open the webui ...")
 	page = browser.new_page()
 	page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 開啟 webui 的網頁
-	print(" [ok]")
+	Timer.end()
 	
-	print(" Handle multi login ...", end="", flush=True) # 處理 multi login 問題
+	Timer.start(" Handle multi login ...") # 處理 multi login 問題
 	try:
 		page.locator('button[name="yes"]').wait_for(timeout=1000) # 等待 "yes" 按鈕出現
 		page.click('button[name="yes"]') # 按下 "yes" 按鈕 (登出其他的 webui)
 	except TimeoutError: # 若不需要重新登入, 則跳過這一步
 		print(" [debug]")
 		pass
-	print(" [ok]")
+	Timer.end()
 	
-	print(" Read dashboard info ...", end="", flush=True)
+	Timer.start(" Read dashboard info ...")
 	model_name = get_element_inner_text(page, 'span[name="span_module_name"]')
 	mac = get_element_inner_text(page, 'span[name="span_sysmac"]')
-	print(" [ok]")
+	Timer.end()
 	
-	print(" Goto cellular page & Reading info ...", end="", flush=True)
+	Timer.start(" Goto cellular page & Reading info ...")
 	page.goto("http://192.168.225.1/cellular_info.html", timeout=DEFAULT_TIME_OUT_MS) # 進入到 Device Status - Cellular Info 頁面
 	imsi = get_element_inner_text(page, 'span[name="imsi"]')
 	band_code = get_element_inner_text(page, 'span[name="band5g"]')
-	print(" [ok]")
+	Timer.end()
 	
-	print(" Set auto refresh interval ...", end="", flush=True)
+	Timer.start(" Set auto refresh interval ...")
 	page.fill('input[name="autoRefresh_interval"]', "3") # 將 terminal 刷新間隔設為 3s
-	print(" [ok]")
+	Timer.end()
 	
 	print_divider()
 	
@@ -125,9 +138,9 @@ def main() -> None:
 	with sync_playwright() as p:
 		print_divider()
 		
-		print(" Launch chromium ...", end="", flush=True)
+		Timer.start(" Launch chromium ...")
 		browser = p.chromium.launch(headless=True)
-		print(" [ok]")
+		Timer.end()
 		
 		try:
 			crawler(browser) # 開始爬 webui 的網頁
