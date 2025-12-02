@@ -1,6 +1,6 @@
 import time, os, urllib.parse, threading, collections, warnings
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright, Browser, Page
+from playwright.sync_api import sync_playwright, TimeoutError, Browser, Page
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
@@ -19,9 +19,9 @@ def get_webui_auth_url() -> str: # Pegatron 5G ODU 的 webui 網址, 包含帳�
 	webui_password = urllib.parse.quote(os.getenv("PEGATRON_WEBUI_PASSWORD"))
 	return f"http://{webui_username}:{webui_password}@192.168.225.1" # 附帶 username & password 的 localhost url
 
-def get_element_inner_text(page: Page, selector: str) -> str: # 抓取某個元素的 innerText
+def get_element_inner_text(page: Page, selector: str, timeout = DEFAULT_TIME_OUT_MS) -> str: # 抓取某個元素的 innerText
 	locator = page.locator(selector) # 搜尋元素
-	locator.wait_for(timeout=DEFAULT_TIME_OUT_MS) # 等待元素出現
+	locator.wait_for(timeout=timeout) # 等待元素出現
 	return locator.inner_text().strip() # 回傳元素的 innerText, 並去掉頭尾空白
 
 def plot_thread() -> None: # 用於繪製圖表的 thread
@@ -99,10 +99,22 @@ def crawler(browser: Browser) -> None: # 爬蟲
 	print_divider()
 	
 	while True: # 不停地抓取訊號強度
-		rsrp_dbm = int(get_element_inner_text(page, 'div[name="rsrp_5g"]').rstrip(" dBm"))
-		rsrq_db = int(get_element_inner_text(page, 'div[name="rsrq_5g"]').rstrip(" dB"))
-		sinr_db = int(get_element_inner_text(page, 'div[name="sinr_5g"]').rstrip(" dB"))
-		data.append({ "time": time.time(), "rsrp_dbm": rsrp_dbm, "rsrq_db": rsrq_db, "sinr_db": sinr_db })
+		try:
+			rsrp_dbm_str = get_element_inner_text(page, 'div[name="rsrp_5g"]', 1000)
+			rsrq_db_str = get_element_inner_text(page, 'div[name="rsrq_5g"]', 1000)
+			sinr_db_str = get_element_inner_text(page, 'div[name="sinr_5g"]', 1000)
+		except TimeoutError:
+			page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 重新登入
+			page.goto("http://192.168.225.1/cellular_info.html", timeout=DEFAULT_TIME_OUT_MS)
+			page.fill('input[name="autoRefresh_interval"]', "3") # 將 terminal 刷新間隔設為 3s
+			continue # 繼續迴圈
+		
+		data.append({
+			"time": time.time(),
+			"rsrp_dbm": int(rsrp_dbm_str.rstrip(" dBm")),
+			"rsrq_db": int(rsrq_db_str.rstrip(" dB")),
+			"sinr_db": int(sinr_db_str.rstrip(" dB"))
+		})
 		while len(data) > 1 and data[0]["time"] - time.time() < -60: data.popleft() # 刪除舊資料 (只保留時間範圍內的資料)
 
 def main() -> None:
