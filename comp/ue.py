@@ -67,11 +67,13 @@ def crawler(browser: Browser) -> None: # 爬蟲
 	page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 開啟 webui 的網頁
 	print(" [ok]")
 	
-	# [todo] 這一步驟會同時等待 ODU 型號和 "yes" 按鈕, 如果其中一個元素先出現並且是 "yes" 按鈕, 那麼需要先登出其他的 webui
-	# 如果 ODU 型號先出現, 那麼代表不用登出其他的 webui, 直接進到 terminal 頁面
 	print(" Handle multi login ...", end="", flush=True) # 處理 multi login 問題
-	page.locator('button[name="yes"]').wait_for(timeout=DEFAULT_TIME_OUT_MS)
-	page.click('button[name="yes"]') # 按下 "yes" 按鈕 (登出其他的 webui)
+	try:
+		page.locator('button[name="yes"]').wait_for(timeout=1000) # 等待 "yes" 按鈕出現
+		page.click('button[name="yes"]') # 按下 "yes" 按鈕 (登出其他的 webui)
+	except TimeoutError: # 若不需要重新登入, 則跳過這一步
+		print(" [debug]")
+		pass
 	print(" [ok]")
 	
 	print(" Read dashboard info ...", end="", flush=True)
@@ -104,8 +106,8 @@ def crawler(browser: Browser) -> None: # 爬蟲
 			rsrq_db_str = get_element_inner_text(page, 'div[name="rsrq_5g"]', 1000)
 			sinr_db_str = get_element_inner_text(page, 'div[name="sinr_5g"]', 1000)
 		except TimeoutError:
-			page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 重新登入
-			page.goto("http://192.168.225.1/cellular_info.html", timeout=DEFAULT_TIME_OUT_MS)
+			page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 重新登入 (因為 terminal 一段時間後會登出)
+			page.goto("http://192.168.225.1/cellular_info.html", timeout=DEFAULT_TIME_OUT_MS) # 進入到 Device Status - Cellular Info 頁面
 			page.fill('input[name="autoRefresh_interval"]', "3") # 將 terminal 刷新間隔設為 3s
 			continue # 繼續迴圈
 		
