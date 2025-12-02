@@ -6,7 +6,11 @@ from matplotlib.animation import FuncAnimation
 
 warnings.simplefilter("ignore", UserWarning)
 
-DEFAULT_TIME_OUT_MS = 5000 # 預設的 timeout (5s)
+load_dotenv()
+DEFAULT_TIME_OUT_MS = int(os.getenv("DEFAULT_TIME_OUT_MS", 5000)) # 預設的 timeout (5s)
+WINDOW_SIZE_SEC = int(os.getenv("WINDOW_SIZE_SEC", 60)) # 時間窗口大小, 超過 60 秒的資料會被捨棄
+PLOT_ANIMATION_FPS = int(os.getenv("PLOT_ANIMATION_FPS", 2)) # 圖表每秒刷新幾次
+
 data = collections.deque() # threads share data (ODU 訊號資料)
 data_lock = threading.Lock() # lock
 
@@ -14,7 +18,6 @@ def print_divider() -> None: # print 一個分隔線到 terminal
 	print("-" * 40)
 
 def get_webui_auth_url() -> str: # Pegatron 5G ODU 的 webui 網址, 包含帳號密碼
-	load_dotenv()
 	webui_username = urllib.parse.quote(os.getenv("PEGATRON_WEBUI_USERNAME")) # 讀取 .env 的 webui 帳密, 並編碼 (url 不能有特殊字元)
 	webui_password = urllib.parse.quote(os.getenv("PEGATRON_WEBUI_PASSWORD"))
 	return f"http://{webui_username}:{webui_password}@192.168.225.1" # 附帶 username & password 的 localhost url
@@ -31,16 +34,16 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 	axe[0].set_title("UE RSRP")
 	axe[0].set_xlabel("Time")
 	axe[0].set_ylabel("dBm")
-	axe[0].set_xlim(-60, 0)
-	axe[0].set_ylim(-140, -44)
+	axe[0].set_xlim(-WINDOW_SIZE_SEC, 0)
+	axe[0].set_ylim(-140, -44) # Pegatron terminal 的 rsrp range
 	axe[0].grid(True)
 	line_rsrp, = axe[0].plot([], [], '-', lw=2)
 	
 	axe[1].set_title("UE SINR")
 	axe[1].set_xlabel("Time")
 	axe[1].set_ylabel("dB")
-	axe[1].set_xlim(-60, 0)
-	axe[1].set_ylim(-23, 40)
+	axe[1].set_xlim(-WINDOW_SIZE_SEC, 0)
+	axe[1].set_ylim(-23, 40) # Pegatron terminal 的 sinr range
 	axe[1].grid(True)
 	line_sinr, = axe[1].plot([], [], '-', lw=2)
 	
@@ -57,7 +60,7 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 		line_sinr.set_data(x_times, y_sinr)
 		return (line_rsrp, line_sinr)
 	
-	ani = FuncAnimation(fig, update, interval=500, blit=True, save_count=200) # 建立動畫
+	ani = FuncAnimation(fig, update, interval=1000/PLOT_ANIMATION_FPS, blit=True, save_count=200) # 建立動畫
 	plt.tight_layout()
 	plt.show()
 
@@ -130,7 +133,8 @@ def crawler(browser: Browser) -> None: # 爬蟲
 			"rsrq_db": int(rsrq_db_str.rstrip(" dB")),
 			"sinr_db": int(sinr_db_str.rstrip(" dB"))
 		})
-		while len(data) > 1 and data[0]["time"] - time.time() < -60: data.popleft() # 刪除舊資料 (只保留時間範圍內的資料)
+		while len(data) > 1 and data[0]["time"] - time.time() < -WINDOW_SIZE_SEC:
+			data.popleft() # 刪除舊資料 (只保留時間範圍內的資料)
 
 def main() -> None:
 	threading.Thread(target=plot_thread, daemon=True).start() # 啟動圖表繪製的 thread
