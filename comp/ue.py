@@ -14,6 +14,10 @@ PLOT_ANIMATION_FPS = int(os.getenv("PLOT_ANIMATION_FPS", 2)) # 圖表每秒刷�
 data = collections.deque() # threads share data (ODU 訊號資料)
 data_lock = threading.Lock() # lock
 
+def mean(l: list) -> float: # 取平均
+	if len(l) == 0: return 0
+	return sum(l) / len(l)
+
 def print_divider() -> None: # print 一個分隔線到 terminal
 	print("-" * 40)
 
@@ -27,12 +31,20 @@ def get_element_inner_text(page: Page, selector: str, timeout = DEFAULT_TIME_OUT
 	locator.wait_for(timeout=timeout) # 等待元素出現
 	return locator.inner_text().strip() # 回傳元素的 innerText, 並去掉頭尾空白
 
+def make_info_text(now, data_list) -> str: # 生成 now/min/max/avg 的字串
+	if len(data_list) == 0: return "now/min/max/avg = ?/?/?/?" # default string
+	return f"now/min/max/avg = {now}/{min(data_list)}/{max(data_list)}/{mean(data_list):.1f}"
+
 def plot_thread() -> None: # 用於繪製圖表的 thread
 	fig, axe = plt.subplots(2, 1, figsize=(4, 6)) # 圖表 [0] 為 rsrp, 圖表 [1] 為 sinr
 	fig.canvas.manager.set_window_title("Pegatron ODU Signal Analysis") # system window title
 	
+	DEFAULT_TEXT = make_info_text(None, [])
+	text_rsrp = fig.text(0.215, 0.588, DEFAULT_TEXT, ha="left", va="bottom", fontsize=10) # 圖表右下角的 min/max/avg
+	text_sinr = fig.text(0.215, 0.1, DEFAULT_TEXT, ha="left", va="bottom", fontsize=10)
+	
 	axe[0].set_title("UE RSRP")
-	axe[0].set_xlabel("Time")
+	axe[0].set_xlabel("Time (s)")
 	axe[0].set_ylabel("dBm")
 	axe[0].set_xlim(-WINDOW_SIZE_SEC, 0)
 	axe[0].set_ylim(-140, -44) # Pegatron terminal 的 rsrp range
@@ -40,7 +52,7 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 	line_rsrp, = axe[0].plot([], [], '-', lw=2)
 	
 	axe[1].set_title("UE SINR")
-	axe[1].set_xlabel("Time")
+	axe[1].set_xlabel("Time (s)")
 	axe[1].set_ylabel("dB")
 	axe[1].set_xlim(-WINDOW_SIZE_SEC, 0)
 	axe[1].set_ylim(-23, 40) # Pegatron terminal 的 sinr range
@@ -52,15 +64,19 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 			if not data: return (line_rsrp, line_sinr)
 			
 			time_now = time.time()
-			x_times = [signal_data["time"] - time_now for signal_data in data]
+			x_times = [signal_data["time"] - time_now for signal_data in data] # 抓取 threads 共享的訊號資訊
 			y_rsrp = [signal_data["rsrp_dbm"] for signal_data in data]
 			y_sinr = [signal_data["sinr_db"] for signal_data in data]
 		
-		line_rsrp.set_data(x_times, y_rsrp)
+		line_rsrp.set_data(x_times, y_rsrp) # 將訊號資訊繪製成折線圖
 		line_sinr.set_data(x_times, y_sinr)
-		return (line_rsrp, line_sinr)
+		
+		text_rsrp.set_text(make_info_text(y_rsrp[-1], y_rsrp)) # 計算 min/max/avg
+		text_sinr.set_text(make_info_text(y_sinr[-1], y_sinr))
+		
+		return (line_rsrp, line_sinr, text_rsrp, text_sinr)
 	
-	ani = FuncAnimation(fig, update, interval=1000/PLOT_ANIMATION_FPS, blit=True, save_count=200) # 建立動畫
+	ani = FuncAnimation(fig, update, interval=1000/PLOT_ANIMATION_FPS, blit=False) # 建立動畫
 	plt.tight_layout()
 	plt.show()
 
