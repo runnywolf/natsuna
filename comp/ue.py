@@ -47,7 +47,7 @@ def plot_thread() -> None: # 用於繪製圖表的 thread
 	axe[0].set_xlabel("Time (s)")
 	axe[0].set_ylabel("dBm")
 	axe[0].set_xlim(-WINDOW_SIZE_SEC, 0)
-	axe[0].set_ylim(-140, -44) # Pegatron terminal 的 rsrp range
+	axe[0].set_ylim(-140, -40) # Pegatron terminal 的 rsrp range
 	axe[0].grid(True)
 	line_rsrp, = axe[0].plot([], [], '-', lw=2)
 	
@@ -96,7 +96,7 @@ class Timer: # 自訂計時器
 def crawler(browser: Browser) -> None: # 爬蟲
 	Timer.start(" Open the webui ...")
 	page = browser.new_page()
-	page.goto(get_webui_auth_url(), timeout=DEFAULT_TIME_OUT_MS) # 開啟 webui 的網頁
+	page.goto(get_webui_auth_url(), timeout=20000) # 開啟 webui 的網頁
 	Timer.end()
 	
 	Timer.start(" Handle multi login ...") # 處理 multi login 問題
